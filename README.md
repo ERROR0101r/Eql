@@ -1,4 +1,4 @@
-markdown
+
 # 🔍 EQL – SQL Injection & Login Security Tester
 
 <div align="center">
