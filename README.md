@@ -12,7 +12,7 @@
   [![Telegram Channel](https://img.shields.io/badge/Channel-@aab_ho_ga_comeback-2CA5E0?style=for-the-badge&logo=telegram)](https://t.me/aab_ho_ga_comeback)
   
   <p><strong>Developer: @ERROR0101risback</strong></p>
-  <p><em>Version: 2.0 (Stable)</em></p>
+  <p><em>Version: 3.0 (Stable)</em></p>
 </div>
 
 ---
@@ -43,7 +43,8 @@ Built for **authorized security testing** and **educational awareness** purposes
 | **SQL Injection Testing** | 45+ payloads to test authentication bypass vulnerabilities |
 | **Brute Force Testing** | Test username/password combinations |
 | **Full Mode** | Combined SQL injection + brute force testing |
-| **Custom Keywords** | Define success/failure messages for accurate detection |
+| **Smart Detection** | Automatically detects success when failure message is absent |
+| **Custom Failure Keywords** | Define failure messages for accurate detection |
 | **Custom Wordlists** | Use preset lists or provide your own username/password files |
 | **Detailed Reports** | Auto-generated scan.txt with all findings |
 
@@ -75,8 +76,8 @@ The author (@ERROR0101risback) does not condone any illegal activities.
 | Feature | Description |
 |---------|-------------|
 | **45+ SQL Payloads** | Comprehensive SQL injection payload collection |
-| **Smart Detection** | Detects success via redirects, keywords, time delays, content changes |
-| **Custom Keywords** | Define your own success/failure messages for accurate detection |
+| **Smart Success Detection** | If failure message not found → automatically counts as success |
+| **Custom Failure Keywords** | Define your own failure messages for accurate detection |
 | **Dual Mode** | SQL Injection only / Brute Force only / Full Test |
 | **Preset Wordlists** | Built-in username and password lists |
 | **Custom Wordlists** | Load your own username/password files |
@@ -153,12 +154,13 @@ Password field name: password
 Submit button name: login
 ```
 
-Step 3: Enter Detection Keywords
+Step 3: Enter Failure Keywords Only
 
 ```
 Enter failure keywords (comma separated): Invalid password, Login failed, Incorrect
-Enter success keywords (comma separated): Dashboard, Welcome, Admin panel
 ```
+
+Note: If failure message not found on page, tool will mark as SUCCESS
 
 Step 4: Select Testing Mode
 
@@ -196,6 +198,17 @@ Valid Credentials Found: 1
 
 ---
 
+HOW DETECTION WORKS
+
+Scenario Detection Method
+Failure keyword found Login FAILED
+No failure keyword found Login SUCCESSFUL (assumed valid)
+Redirect occurs Login SUCCESSFUL
+Time delay > 4 seconds Possible SQL injection success
+URL changes Login SUCCESSFUL
+
+---
+
 OUTPUT FILES
 
 All scan results are automatically saved to:
@@ -207,7 +220,7 @@ scan.txt
 Report Includes:
 
 · Scan date and time
-· Detection keywords used
+· Failure keywords used
 · SQL injection vulnerabilities found (payloads and indicators)
 · Valid credentials discovered (username/password)
 · Response times and indicators
@@ -242,10 +255,11 @@ Finding Field Names:
 3. Look for name="username" attribute
 4. Do same for password field and submit button
 
-Finding Keywords:
+Finding Failure Keywords:
 
-1. Enter wrong password → Note error message
-2. Enter correct credentials → Note success message
+1. Enter wrong password
+2. Note the error message shown
+3. Enter that message as failure keyword
 
 Example Flow:
 
@@ -261,7 +275,6 @@ Password field name: pass
 Submit button name: submit
 
 Enter failure keywords: invalid, incorrect, failed
-Enter success keywords: welcome, dashboard, logout
 
 Mode (1/2/3): 3
 
@@ -281,19 +294,19 @@ Select (1/2): 1
 SQL INJECTION TESTING
 ============================================================
 [1/45] Testing: ' OR '1'='1' --...
-    [.] Not vulnerable - Failure keyword matched
+    [.] Not vulnerable - Failure keyword found
 [2/45] Testing: ' OR '1'='1' #...
-    [!] VULNERABLE! Success keyword matched (0.84s)
+    [!] VULNERABLE! No failure keyword found (Success)
 
 ============================================================
 BRUTE FORCE TESTING
 ============================================================
 [1/361] Testing: admin:admin...
-    [.] Not vulnerable - Failure keyword matched
+    [.] Failed - Failure keyword found
 [2/361] Testing: admin:password...
-    [.] Not vulnerable - Failure keyword matched
+    [.] Failed - Failure keyword found
 [3/361] Testing: admin:123456...
-    [!!!] FOUND! admin:123456 - Redirect detected
+    [!!!] FOUND! admin:123456 - No failure keyword found
 
 [+] Report saved to scan.txt
 
@@ -359,5 +372,5 @@ You are NOT permitted to:
     <a href="https://t.me/aab_ho_ga_comeback"><img src="https://img.shields.io/badge/Channel-@aab_ho_ga_comeback-2CA5E0?style=flat-square&logo=telegram"></a>
   </p>
 
-  <p>© 2026 EQL | Version 2.0 Stable</p>
+  <p>© 2026 EQL | Version 3.0 Stable</p>
 </div>
